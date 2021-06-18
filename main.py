@@ -6,25 +6,37 @@ from collections import deque
 # English Wikipedia pages
 wiki = wikipediaapi.Wikipedia('en') #TODO put in __init__ file
 
-def bfs(tree, target, seen):
-    # Search frontier
-    for page in tree:
-        if page.title == target.title:
-            return True
-    # Expand frontier nodes to next depth
-    n = len(tree)
-    while n > 0:
-        print(n)
-        page = tree.popleft()
-        n -= 1
-        links = page.links
-        for title, link in links.items():
-            if title not in seen:
-                seen[title] = link
-                tree.append(link)
-    # Return that target was not found
-    return False
+class PageNode(object):
 
+    def __init__(self, page):
+        self.page = page
+        self.links = []
+
+    def __hash__(self):
+        return hash(self.page.title)
+
+    def __eq__(self, other):
+        return self.page.title == other.page.title
+
+    def gen_links(self):
+        links = self.page.links
+        for _, page in links.items():
+            self.links.append(PageNode(page))
+
+def search(G, targetNode):
+    for node in G:
+        if node == targetNode:
+            return True
+    return False
+'''
+def idfs(G, targetNode):
+    d = 0
+    maxdepth = 6
+    while d <= maxdepth:
+        print('Depth is %d' % d)
+        for 
+        d += 1
+'''
 def main():
 
     # Check for correct number of arguments
@@ -47,29 +59,14 @@ def main():
 
     #TODO Check for connection, webpage request errors
 
-    # Initialize search "trees"
-    '''
+    # Initialize target and search graph
     target = wiki.page('Kevin Bacon')
-    tree_bot = dict()
-    tree_top = dict()
-    tree_bot[target.title] = target
-    tree_top[source.title] = source
-    print(tree_bot)
-    print(tree_top)
-    '''
-
-    target = wiki.page('Kevin Bacon')
-    tree = deque()
-    tree.append(source)
-    n = 0
-    seen = dict()
-    found = bfs(tree, target, seen)
-    while not found:
-        #print('Examined %d nodes' % n)
-        found = bfs(tree, target, seen)
-        print('Number of active nodes %d' % len(tree))
-        n += 1
-    print('Found after examining %d nodes' % (n))
+    targetNode = PageNode(target)
+    sourceNode = PageNode(source)
+    G = [sourceNode]
+    found = search(G, targetNode)
+    #found = idfs(G, targetNode)
+    print(found)
 
 if __name__ == '__main__':
     main()
