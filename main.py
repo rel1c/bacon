@@ -7,14 +7,22 @@ from collections import deque
 wiki = wikipediaapi.Wikipedia('en') #TODO put in __init__ file
 
 def bfs(tree, target, seen):
-    page = tree.popleft()
-    if page.title == target.title:
-        return True
-    links = page.links
-    for title, link in links.items():
-        if title not in seen:
-            seen[title] = link
-            tree.append(link)
+    # Search frontier
+    for page in tree:
+        if page.title == target.title:
+            return True
+    # Expand frontier nodes to next depth
+    n = len(tree)
+    while n > 0:
+        print(n)
+        page = tree.popleft()
+        n -= 1
+        links = page.links
+        for title, link in links.items():
+            if title not in seen:
+                seen[title] = link
+                tree.append(link)
+    # Return that target was not found
     return False
 
 def main():
