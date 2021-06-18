@@ -1,3 +1,4 @@
+import sys
 import hashlib
 
 # Object representing a Wikipedia page
@@ -29,6 +30,8 @@ class PageGraph(object):
     def get_page(self, page):
         return self.pages.get(page)
 
+
+
 def main():
     p1 = Page("https://www.foobar.com")
     p2 = Page("https://www.bazqux.com")
@@ -36,6 +39,8 @@ def main():
     graph.add_page(p1)
     graph.add_page(p2)
     print(graph.get_page(p2))
+    print("Size of Page object:", sys.getsizeof(p1))
+    print("Size of PageGraph object:", sys.getsizeof(graph))
 
 if __name__ == '__main__':
     main()
