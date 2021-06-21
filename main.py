@@ -1,11 +1,11 @@
-import pickledb
 import sys
+import time
 import wikipediaapi
 
 from collections import deque
 
 # English Wikipedia pages
-wiki = wikipediaapi.Wikipedia('en') #TODO put in __init__ file
+wiki = wikipediaapi.Wikipedia('en')
 
 def main():
 
@@ -29,29 +29,45 @@ def main():
 
     #TODO Check for connection, webpage request errors
 
-    # Initialize target and database
+    # Initialize target and graph
     target = wiki.page('Kevin Bacon')
-    db = pickledb.load('bacon.db', True) #Auto-dump = True
-    db.dump #--DEBUG
+    G = dict()
+    CF = deque() #Current frontier
+    NF = deque() #Next frontier
+    maxdepth = 2
+    depth = 0
+    CF.append(target)
+    G[target.title] = depth
+
+    sum_link = 0
+    sum_look = 0
+    num_link = 0
+    num_look = 0
 
     # Build link table
-    Q = deque()
-    maxdepth = 2
-    Q.append((target, 0))
-    d = 0
-    print('Value of d: %d' % d) #--DEBUG
-    while d < maxdepth:
-        (page, depth) = Q.popleft()
-        if depth > d:
-            d = depth
-        links = page.backlinks
-        for title, link in links.items():
-            if not db.exists(title):
-                Q.append((link, d+1))
-                db.set(title, d)
-    #print('Size of link table: %d' % len(G))
-    print('Entries in database: %d' % len(db.getall()))
-    db.dump()
+    while depth < maxdepth:
+        print('Depth is %d' % depth)
+        print('CF is size %d' % len(CF))
+        for page in CF:
+            tic_link = time.perf_counter_ns()
+            links = page.backlinks
+            toc_link = time.perf_counter_ns()
+            sum_link += toc_link - tic_link
+            num_link += 1
+            for title, link in links.items():
+                tic_look = time.perf_counter_ns()
+                if link not in G:
+                    NF.append(link)
+                    G[title] = depth
+                toc_look = time.perf_counter_ns()
+                sum_look += toc_link - tic_link
+                num_look += 1
+        CF = NF
+        NF = deque()
+        depth += 1
+    print('Entries in database: %d' % len(G))
+    print('Average time to request links: %f' % (sum_link / num_link))
+    print('Average time to find links in graph: %f' % (sum_look / num_look))
 
 if __name__ == '__main__':
     main()
