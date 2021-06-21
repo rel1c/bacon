@@ -1,13 +1,77 @@
+import queue
 import sys
-import time
+import threading
 import wikipediaapi
 
-from collections import deque
-
 # English Wikipedia pages
-wiki = wikipediaapi.Wikipedia('en')
+WIKI = wikipediaapi.Wikipedia('en')
+ADDR = 'https://en.wikipedia.org/wiki/'
+
+# Number of search threads to run
+NUM_THREADS = 16
+
+# Signal for killing working threads
+KILL_SIG = threading.Event()
+
+def bfs_worker(q, target):
+    '''Performs breadth first search on nodes in a queue for a given target.
+    Nodes representing Wikipedia pages are tuples containing a page title
+    string and their depth from the root node. Once the target has been
+    found its depth from the root node is displayed and the process (and
+    all running threads for the process) is terminated.'''
+    while True:
+
+        # Skip loop iteration if no pages to process
+        if KILL_SIG.is_set():
+            return
+        elif q.empty():
+            continue
+
+        # Check if page title in queue is target
+        (title, depth) = q.get()
+        if title == target:
+            KILL_SIG.set()
+            print(depth)
+            return
+
+        # Find links for page
+        page = WIKI.page(title)
+        try:
+            links = page.links
+        except: #in case request errors, requeue the page
+            q.put((page, depth))
+            continue
+
+        # Add page links to queue to be processed
+        for link in links.values():
+            if link.namespace == wikipediaapi.Namespace.MAIN:
+                q.put((link.title, depth+1))
+            if KILL_SIG.is_set():
+                return
+
+        # If no links and queue is empty, end search
+        if q.empty():
+            KILL_SIG.set()
+            print(-1)
+            return
+
+def check_url(url):
+    '''Checks if given url starts with Wikipedia prefix.'''
+    return url.startswith(ADDR)
+
+def get_page_title(url):
+    '''Returns a page title for a given Wikipedia url. Returns None if no such
+    page exists.'''
+    title = url.removeprefix(ADDR)
+    source = WIKI.page(title)
+    if source.exists():
+        return title
+    return None
 
 def main():
+    '''This program performs a multi-threaded breadth-first search to find the
+    shortest path between a given Wikipedia article and the Wikipedia article
+    for actor Kevin Bacon.'''
 
     # Check for correct number of arguments
     if 2 < len(sys.argv) or len(sys.argv) < 2:
@@ -16,58 +80,30 @@ def main():
 
     # Check entered URL is a valid Wikipedia page
     url = sys.argv[1]
-    if not url.startswith('https://en.wikipedia.org/wiki/'):
-        print('Invalid URL, must be Wikipedia article')
-        return -1
-
-    # Extract topic from URL and check if it has a Wikipedia article
-    topic = url.removeprefix('https://en.wikipedia.org/wiki/')
-    source = wiki.page(topic)
-    if not source.exists():
-        print('Invalid URL, must be Wikipedia article')
-        return -1
-
-    #TODO Check for connection, webpage request errors
+    if not check_url(url):
+        print('Invalid URL, must start with "%s"' % ADDR)
+        return 1
+    title = get_page_title(url)
+    if not title:
+        print('Invalid URL, not an existing Wikipedia article')
+        return 1
 
     # Initialize target and graph
-    target = wiki.page('Kevin Bacon')
-    G = dict()
-    CF = deque() #Current frontier
-    NF = deque() #Next frontier
-    maxdepth = 2
-    depth = 0
-    CF.append(target)
-    G[target.title] = depth
+    target = WIKI.page('Kevin Bacon')
+    q = queue.Queue(maxsize=0)
+    q.put((title, 0))
 
-    sum_link = 0
-    sum_look = 0
-    num_link = 0
-    num_look = 0
+    # Start worker threads
+    num_threads = NUM_THREADS
+    workers = []
+    for i in range(num_threads):
+        worker = threading.Thread(target=bfs_worker, args=(q, target.title))
+        worker.start()
+        workers.append(worker)
 
-    # Build link table
-    while depth < maxdepth:
-        print('Depth is %d' % depth)
-        print('CF is size %d' % len(CF))
-        for page in CF:
-            tic_link = time.perf_counter_ns()
-            links = page.backlinks
-            toc_link = time.perf_counter_ns()
-            sum_link += toc_link - tic_link
-            num_link += 1
-            for title, link in links.items():
-                tic_look = time.perf_counter_ns()
-                if link not in G:
-                    NF.append(link)
-                    G[title] = depth
-                toc_look = time.perf_counter_ns()
-                sum_look += toc_link - tic_link
-                num_look += 1
-        CF = NF
-        NF = deque()
-        depth += 1
-    print('Entries in database: %d' % len(G))
-    print('Average time to request links: %f' % (sum_link / num_link))
-    print('Average time to find links in graph: %f' % (sum_look / num_look))
+    # Block until workers are complete
+    for worker in workers:
+        worker.join()
 
 if __name__ == '__main__':
     main()
