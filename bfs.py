@@ -17,18 +17,18 @@ def bfs_worker(q, target):
     '''Performs breadth first search on nodes in a queue for a given target.
     Nodes representing Wikipedia pages are tuples containing a page title
     string and their depth from the root node. Once the target has been
-    found its depth from the root node is displayed and the process (and
+    found, its depth from the root node is displayed and the process (and
     all running threads for the process) is terminated.'''
     while True:
 
         # Skip loop iteration if no pages to process
         if KILL_SIG.is_set():
             return
-        elif q.empty():
+        elif nq.empty():
             continue
 
         # Check if page title in queue is target
-        (title, depth) = q.get()
+        (title, depth) = nq.get()
         if title == target:
             KILL_SIG.set()
             print(depth)
@@ -38,14 +38,14 @@ def bfs_worker(q, target):
         page = WIKI.page(title)
         try:
             links = page.links
-        except: #in case request errors, requeue the page
+        except: # in case of request errors, requeue the page
             q.put((page, depth))
             continue
 
         # Add page links to queue to be processed
         for link in links.values():
             if link.namespace == wikipediaapi.Namespace.MAIN:
-                q.put((link.title, depth+1))
+                cq.put((link.title, depth+1))
             if KILL_SIG.is_set():
                 return
 
@@ -54,6 +54,22 @@ def bfs_worker(q, target):
             KILL_SIG.set()
             print(-1)
             return
+
+def search_db(db, cq):
+    while not KILL_SIG.is_set():
+        cur = ...
+        # Grab link title in current queue
+        (title, depth) = cf.get()
+        cur.execute("SELECT depth FROM links WHERE title == ?", (title,))
+        r = cur.fetchone()
+        # If the title exists in the database, return its depth from the source
+        if r:
+            rec_depth = r[0]
+            #TODO Add source page to database
+            KILL_SIG.set()
+            print(rec_depth + depth)
+        else:
+            nq.put((title, depth))
 
 def check_url(url):
     '''Checks if given url starts with Wikipedia prefix.'''
