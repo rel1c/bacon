@@ -1,2 +1,6 @@
+# python
 __pycache__/
 *.pytest_cache
+
+# project specific
+test.db
