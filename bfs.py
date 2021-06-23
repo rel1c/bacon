@@ -1,4 +1,5 @@
 import queue
+import sqlite3
 import sys
 import threading
 import wikipediaapi
@@ -13,7 +14,7 @@ NUM_THREADS = 16
 # Signal for killing working threads
 KILL_SIG = threading.Event()
 
-def bfs_worker(q, target):
+def bfs_worker(cq, nq):
     '''Performs breadth first search on nodes in a queue for a given target.
     Nodes representing Wikipedia pages are tuples containing a page title
     string and their depth from the root node. Once the target has been
@@ -27,45 +28,42 @@ def bfs_worker(q, target):
         elif nq.empty():
             continue
 
-        # Check if page title in queue is target
-        (title, depth) = nq.get()
-        if title == target:
-            KILL_SIG.set()
-            print(depth)
-            return
-
         # Find links for page
+        (title, depth) = nq.get()
         page = WIKI.page(title)
         try:
             links = page.links
         except: # in case of request errors, requeue the page
-            q.put((page, depth))
+            nq.put((page, depth))
             continue
 
         # Add page links to queue to be processed
         for link in links.values():
-            if link.namespace == wikipediaapi.Namespace.MAIN:
-                cq.put((link.title, depth+1))
             if KILL_SIG.is_set():
                 return
+            if link.namespace == wikipediaapi.Namespace.MAIN:
+                cq.put((link.title, depth+1))
 
         # If no links and queue is empty, end search
-        if q.empty():
+        if cq.empty():
             KILL_SIG.set()
             print(-1)
-            return
 
-def search_db(db, cq):
+def search_db(cq, nq, con):
+    '''Searches a database of links given by a connection object. If a link in
+    the current frontier is found to exist, the function outputs the sum of
+    its degrees of separation and the current depth of the frontier.'''
+    cur = con.cursor()
     while not KILL_SIG.is_set():
-        cur = ...
+        if cq.empty():
+            continue
         # Grab link title in current queue
-        (title, depth) = cf.get()
-        cur.execute("SELECT depth FROM links WHERE title == ?", (title,))
+        (title, depth) = cq.get()
+        cur.execute("SELECT depth FROM links WHERE title = ?", (title,))
         r = cur.fetchone()
         # If the title exists in the database, return its depth from the source
         if r:
             rec_depth = r[0]
-            #TODO Add source page to database
             KILL_SIG.set()
             print(rec_depth + depth)
         else:
@@ -81,7 +79,7 @@ def get_page_title(url):
     title = url.removeprefix(ADDR)
     source = WIKI.page(title)
     if source.exists():
-        return title
+        return source.title
     return None
 
 def main():
@@ -99,27 +97,34 @@ def main():
     if not check_url(url):
         print('Invalid URL, must start with "%s"' % ADDR)
         return 1
-    title = get_page_title(url)
-    if not title:
+    source = get_page_title(url)
+    if not source:
         print('Invalid URL, not an existing Wikipedia article')
         return 1
 
     # Initialize target and graph
     target = WIKI.page('Kevin Bacon')
-    q = queue.Queue(maxsize=0)
-    q.put((title, 0))
+    cq = queue.Queue(maxsize=0)
+    nq = queue.Queue(maxsize=0)
+    cq.put((source, 0))
+
+    # Open database
+    con = sqlite3.connect('links.db')
 
     # Start worker threads
     num_threads = NUM_THREADS
     workers = []
     for i in range(num_threads):
-        worker = threading.Thread(target=bfs_worker, args=(q, target.title))
-        worker.start()
+        worker = threading.Thread(target=bfs_worker, args=(cq, nq), daemon=True)
         workers.append(worker)
+        worker.start()
 
-    # Block until workers are complete
-    for worker in workers:
-        worker.join()
+    # Search database for results from worker threads
+    if not KILL_SIG.is_set():
+        search_db(cq, nq, con)
+
+    # Close database
+    con.close()
 
 if __name__ == '__main__':
     main()

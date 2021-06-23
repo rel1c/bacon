@@ -8,10 +8,14 @@ ADDR = 'https://en.wikipedia.org/wiki/'
 # Maximum depth to search for links
 MAX_DEPTH = 3
 
-def idfs(s, con, cur):
+def build_db(con, target):
     '''Builds a database of links and their depth from an initial set of
     Wikipedia pages in a stack. The function uses a search similar to iterative
     deepening DFS to save on memory and record the shallowest depth.'''
+    cur = con.cursor()
+    cur.execute("CREATE TABLE IF NOT EXISTS links (title, depth)")
+    s = []
+    s.append((target, 0)) # Initial page is at zero depth
     while(len(s)):
         # Fetch page and its depth from stack
         (page, depth) = s.pop()
@@ -29,7 +33,7 @@ def idfs(s, con, cur):
             continue
 
         links = page.backlinks # Work backwards from initial page
-        for title, link in list(links.items())[::-1]: # Treat list like a stack
+        for title, link in links.items():
             if link.namespace != wikipediaapi.Namespace.MAIN:
                 continue
             cur.execute("SELECT title, depth FROM links WHERE title == ?", (title,))
@@ -40,16 +44,9 @@ def idfs(s, con, cur):
 def main():
 
     # Initialize target and database
-    target = WIKI.page('Kevin Bacon')
     con = sqlite3.connect('links.db')
-    cur = con.cursor()
-    cur.execute("CREATE TABLE IF NOT EXISTS links (title, depth)")
-    s = []
-    s.append((target, 0)) # Initial page is at zero depth
-
-    # Build database
-    idfs(s, con, cur)
-
+    target = WIKI.page('Kevin Bacon')
+    build_db(con, target)
     con.commit()
     con.close()
 
