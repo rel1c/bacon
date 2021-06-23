@@ -1,9 +1,9 @@
+import queue
 import sqlite3
 import wikipediaapi
 
-# English Wikipedia pages
+# Wikipedia address format for English articles
 WIKI = wikipediaapi.Wikipedia('en')
-ADDR = 'https://en.wikipedia.org/wiki/'
 
 # Maximum depth to search for links
 MAX_DEPTH = 3

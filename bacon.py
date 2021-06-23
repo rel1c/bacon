@@ -4,7 +4,7 @@ import sys
 import threading
 import wikipediaapi
 
-# English Wikipedia pages
+# Wikipedia address format for English articles
 WIKI = wikipediaapi.Wikipedia('en')
 ADDR = 'https://en.wikipedia.org/wiki/'
 
